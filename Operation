@@ -1,0 +1,236 @@
+Nginx && PHP || Python
+
+Nginx模块:
+http_ssl_module:			加密网站
+stream:				基于TCP/UDP的调度所需模块
+http_stub_status_module: 	Web服务器状态模块
+
+
+Nginx 配置文件的重要关键字(注意插入的位置)(注意空格位置):
+
+stream{
+	upstream backed-ssh{
+		server 192.168.2.100:22;		//基于TCP/UDP的调度.以ssh为例
+		server 192.168.2.200:22;
+	}
+	server{
+		listen 12345;
+		proxy_pass backed-ssh;
+	}
+}
+
+http{
+	worker_processes 1;				//与CPU核心数量一致
+	worker_connections 65536;			//每个worker最大并发连接数
+	client_header_buffer_size 1k;			//默认请求包头信息的缓存,解决URL太长的问题;
+	large_client_header_buffers 4 1m;		//大请求包头部信息的缓存个数与容量,将URL设置为4个1M大小;
+	server_tokens off;				//关闭显示版本号
+	net.ipv4.tcp_syncookies=1;			//表示开启SYN Cookies。当出现SYN等待队列溢出时，启用cookies来处理，可防范少量SYN攻击，默认为0，表示关闭；
+	net.ipv4.tcp_fin_timeout = 1 			//如果套接字由本端要求关闭，这个参数决定了它保持在 FIN-WAIT-2  状态的时间。对端可以出错并永远不关闭连接，甚至意外当机。缺省值是 60 秒。2.2  内核的通常值是 180 秒，你可以按这个设置，但要记住的是，即使你的机器是一个轻载的 WEB 服务器，也有因为大量的死套接字而内存溢出的风险，FIN-  WAIT-2 的危险性比 FIN-WAIT-1 要小，因为它最多只能吃掉 1.5K 内存，但是它们的生存期长些。 
+	net.ipv4.tcp_syn_retries = 1			//在内核放弃建立连接之前发送SYN包的数量。
+	net.ipv4.tcp_synack_retries = 1		//为了打开对端的连接，内核需要发送一个SYN并附带一个回应前面一个SYN的ACK。也就是所谓三次握手中的第二次握手。这个设置决定了内核放弃连接之前发送SYN+ACK包的数量。
+	gzip on;                            		//开启压缩
+	gzip_min_length 1000;               		//小文件不压缩
+	gzip_comp_level 4;                		//压缩比率
+	gzip_types text/plain text/css application/json application/x-javascript text/xml application/xml application/xml+rss text/javascript;			//对特定文件压缩，类型参考mime.types
+
+	upstream webserver {
+		ip_hash;					//相同客户端访问相同web服务器
+		server 套接字(ip:port) [weight=1..] [max_fails=1..] [fail_timeout=20..];
+		...
+		max_fails:		最大失败访问次数.默认1,尝试连接一次
+		fail_timeout:	访问失败停滞时间.一但访问失败后,N秒后才恢复访问.(客户机在N秒内不访问它)
+	}
+	server{
+		listen 80;
+		server_name localhost;
+		error_page	404	/404.html;	//自定义错误页面(404为例)		
+		location / {
+			root html;
+			index index.php index.html index.htm;
+		}
+		location ~* \.(jpg|png)$ {
+			expires 30d;		//期满时间,定义客户端缓存30天;
+		}
+		location ~\.php$ {
+			root html;
+			fastcgi_pass 127.0.0.1:9000;	//跳转到本机的服务器.调用PHP
+			fastcgi_index index.php;
+		}
+		location / {
+			proxy_pass webserver;
+		}
+		location /status {
+                	stub_status on;
+			
+        	}
+		if ($http_user_agent ~* firefox) {
+			rewrite ^/(.*) /xx/$1 break|last|redirect|permament;	//地址重写
+		}
+	}
+}
+
+ss命令将取代netstat,查看:	https://blog.csdn.net/linux7985/article/details/51154264
+Active connections：当前活动的连接数量。
+Accepts：已经接受客户端的连接总数量。
+Handled：已经处理客户端的连接总数量（一般与accepts一致，除非服务器限制了连接数量）。
+Requests：客户端发送的请求数量。
+Reading：当前服务器正在读取客户端请求头的数量。
+Writing：当前服务器正在写响应信息的数量。
+Waiting：当前多少客户端在等待服务器的响应。
+
+
+
+开原软件: Tomcat && Java
+ 
+商业软件:  Redhat:jboss
+	  IBM:websphere
+	  Oracle:weblogic
+
+Tomcat 配置文件的基本框架:/usr/local/tomcat/conf/server.xml
+<Server>
+	<Service>
+		<Connector port=8080 />
+   		<Connector port="8443" protocol="org.apache.coyote.http11.Http11NioProtocol"
+               maxThreads="150" SSLEnabled="true" scheme="https" secure="true"
+               clientAuth="false" sslProtocol="TLS" 
+               keystoreFile="/usr/local/tomcat/keystore"
+               keystorePass="123456" />
+
+		<Engine defaulthost=localhost>
+			<Host name=www.a.com appBase=aa
+				unpackWARs="true" autoDeploy="true">
+
+		<Valve className="org.apache.catalina.valves.AccessLogValve" directory="logs"
+               prefix="www.a.com_access_log" suffix=".txt"
+               pattern="%h %l %u %t &quot;%r&quot; %s %b" />
+
+			<Context path="/test" docBase="/var/www/html" reloadable="true" />
+			</Host>
+			<Host name=www.b.com appBase=bb
+				unpackWARs="true" autoDeploy="true">
+			<Context path="" docBase="base" reloadable="true" />
+			</Host>
+		</Engine>
+	<Service>
+</Server>
+
+关键字:               
+Server:全局
+Service:提供的服务
+Connector port:连接端口
+Engine defaulthost=localhost:引擎,页面访问默认为localhost
+Host:虚拟主机
+name:规定域名
+appBase:根目录
+Context:虚拟主机编辑内容
+path:访问路径.为空时,可在后面的docBase规定根目录下的目录;不为空时,可以做地址重写.
+docBase:默认是ROOT.可修改.
+reloadable:
+
+
+
+
+
+Varnish && squitd:可以当作Web的缓存服务器,会将返回的页面缓存在本地
+
+CDN会增加攻击难度!
+CDN+DNS分离解析:
+假设客户是广州的,当客户请求一个域名时,
+访问本地DNS服务器 ---> DNS分离解析将请求解析到广州的服务器 ---> CDN服务器将缓存结果提交给用户
+从而达到就近原则 !!
+
+
+SubVerison(svn)  cvs git 版本控制系统..TortoiseSVN:图形化界面(英文版)
+服务端:
+yum -y install subversion				//安装svn软件
+svnadmin create /var/svn/project			//创建svn服务器共享目录,可自定义
+svn import . file:///var/svn/project -m "first"	//本地导入初始数据.-m:提示为什么修改
+vim /var/svn/project/conf/svnserve.conf		//修改配置文件,前面的空格注释一定要去掉,严格格式
+anon-access = none					//匿名不给访问
+auth-access = write					//有效用户给予读写权限
+password-db = passwd					//密码文件存放位置
+authz-db = authz						//开启ACL访问控制文件
+vim /var/svn/project/conf/passwd			//修改密码文件,前面的空格注释一定要去掉,严格格式
+[users]
+tom = 123456
+harry = 123456						//一个用户名对应一个密码
+vim /var/svn/project/conf/authz			//修改访问控制文件,规定用户权限,严格格式
+[/]
+tom = rw
+harry = rw							//默认都可以读写.若想针对某一目录设置权限,可另加
+svnserve -d -r /var/svn/project			//开启共享目录,-d:放置后台,-r:指定启动哪个目录
+
+客户端:
+svn --username harry --password 123456 co svn://192.168.2.100 code	//以harry用户读取svn共享文件,co(checkout)指定连接的服务端,其后顺带存放文件的目录code
+vim user.slice						//可以修改一下文件
+svn ci –m "modify user"					//提交新版本.-m指定为何要修改 ci(commit)
+svn update							//将服务器上新的数据同步到本地,差异更新
+svn info svn://192.168.2.100				//查看版本仓库基本信息
+svn log svn://192.168.2.100				//查看版本仓库的日志	
+svn add test.sh						//将文件或目录加入版本控制
+svn mkdir subdir						//创建子目录
+svn rm timers.target					//使用svn删除文件
+svn diff							//查看所有文件的差异
+svn diff umount.target					//仅查看某一个文件的差异
+svn cat svn://192.168.2.100/reboot.target		//查看服务器文件的内容
+svn revert tmp.mount					//还原tmp.mount文件,本地修改但未提交
+svn update                    				//从服务器端还原,本地修改但未提交
+svn merge –r7:2 tuned.service				//将文件从版本7还原到版本2,本地修改且提交了
+svn co -r1 svn://192.168.2.100 code2			//-r可以指定下载版本
+svnadmin dump /var/svn/project > project.bak	//服务器备份
+svnadmin load /var/svn/project1 < project.bak	//服务器还原
+
+Subversion多用户协同工作:
+修改不同文件:		各自修改完后上传.最后svn updata将各自修改的文件同步到本地
+修改相同文件的不同行:	谁先提交就没事,另一个提交的话要先svn updata.再上传
+修改相同文件的同一行:	产生冲突,计算机无法断定,线下解决
+
+git : 一个Web界面何其优美的版本控制软件
+git clone https://github.com/XRZZYW/test		//完整下载
+cp /etc/passwd .						//拷贝文件到git
+git add .							//添加文件到git
+git rm 文件名						//删除一个文件
+git commit -m "xx"					//上传版本
+git push							//刷新哦
+
+
+
+制作Nginx的RPM包
+yum -y install  rpm-build
+rpmbuild -ba nginx.spec					//会报错，没有文件或目录
+ls /root/rpmbuild						//自动生成的目录结构
+BUILD  BUILDROOT  RPMS  SOURCES  SPECS  SRPMS
+cp nginx-1.12.2.tar.gz /root/rpmbuild/SOURCES/
+
+vim /root/rpmbuild/SPECS/nginx.spec
+Name:nginx        
+Version:1.12.2
+Release:10
+Summary: Nginx is a web server software.
+License:GPL    
+URL:    www.test.com    
+Source0:nginx-1.12.2.tar.gz
+#BuildRequires:    
+#Requires:    
+%description
+nginx [engine x] is an HTTP and reverse proxy server.
+%prep
+%setup –q                            		//自动解压源码包，并cd进入目录
+%build
+./configure
+make %{?_smp_mflags}
+%install
+make install DESTDIR=%{buildroot}
+cp /root/rpmbuild/SPECS/nginx.sh %{buildroot}/usr/local/nginx/    
+##								//非必须操作，注意，这里是将一个脚本拷贝到安装目录，必须提前准备该文件
+%files
+%doc
+/usr/local/nginx/*            				//对哪些文件与目录打包
+%changelog
+
+yum –y install  gcc  pcre-devel zlib-devel openssl-devel 	//安装制作RPM的依赖包
+rpmbuild -ba /root/rpmbuild/SPECS/nginx.spec			//制作完毕,可以当作正常RPM包用
+
+
+
